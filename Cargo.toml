@@ -1,0 +1,12 @@
+[package]
+name = "ira-ecc"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rust-lzma = "0.6.0"
+rand = "0.8.5"
+rand_distr = "0.4.3"
+rayon = "1.10.0"
+rand_chacha = "0.3.1"
+indicatif = "0.17.8"
