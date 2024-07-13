@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use crate::{Bit, DecodingOptions, DecodingResult, EccCode, IraEccCode, IraEccCodeCompressedRepresentation};
 
 
@@ -306,4 +307,44 @@ impl EccCode for IraCode23 {
     fn encoded_len(&self) -> usize {
         49152
     }
+}
+
+
+/// Not a generating function in mathematical meaning, just a function used to generate the ratios
+fn ratios_generating_func(x: f64, mean: f64, std: f64) -> f64 {
+    let mx = x - mean;
+
+    let var = std.powi(2);
+
+    if mx < -(2.0 * var).sqrt() {
+        return 0.0;
+    }
+
+    (2.0 / (2.0 * var).sqrt()).powi(2) * (mx + (2.0 * var).sqrt()) *
+        (-(2.0 / (2.0 * var).sqrt()) * (mx + (2.0 * var).sqrt())).exp()
+}
+
+
+pub fn generate_ratios(mean: f64, std: f64) -> HashMap<usize, f64> {
+
+    let mut res: Vec<(usize, f64)> = vec![];
+
+    let begin = (mean - 3.0 * std).floor() as usize;
+    let end = (mean + 6.0 * std).ceil() as usize;
+
+    let mut sum = 0.0;
+
+    for i in begin..end {
+        let val = ratios_generating_func(i as f64, mean, std);
+        if val > 1e-5 {
+            sum += val;
+            res.push((i, val));
+        }
+    }
+
+    res.iter_mut().for_each(|(_, val)| {
+        *val /= sum;
+    });
+
+    HashMap::from_iter(res.into_iter())
 }

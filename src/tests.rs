@@ -1,4 +1,5 @@
-use rand::{random, thread_rng};
+use std::collections::HashMap;
+use rand::{random, Rng, thread_rng};
 use crate::generator::IraCodeGenerator;
 use crate::NodeType::{CHECK, DATA};
 use super::*;

@@ -7,13 +7,11 @@ pub mod generator;
 pub mod compressed;
 
 
-use std::collections::HashMap;
 use rayon::prelude::*;
-use rand::Rng;
 use crate::compressed::IraEccCodeCompressedRepresentation;
 use crate::NodeType::{CHECK, DATA};
 
-type Bit = u8;
+pub type Bit = u8;
 
 #[derive(Clone)]
 enum NodeType {
@@ -50,13 +48,13 @@ impl Default for DecodingOptions {
             min_rounds: 5,
             max_rounds: 50,
             epsilon: 1e-2,
-            max_message: 200.0,
+            max_message: 50.0,
         }
     }
 }
 
 pub struct DecodingResult {
-    data: Vec<f64>,
+    pub data: Vec<f64>,
 }
 
 impl DecodingResult {
@@ -110,6 +108,16 @@ pub fn bits_to_belief(bits: &[Bit], belief_level: f64) -> Vec<f64> {
 }
 
 
+/// Encoding an IRA is a simple, exact, linear-time operation
+/// In contrary, decoding is a hard problem and approximate algorithms are used
+/// This implementation uses 'belief propagation' algorithm
+/// In consequence, the decoding process operates on beliefs rather than bits
+/// Belief is essentially a random variable of the correct (before errors) value of a bit
+/// Here beliefs are represented as 64-bit float equal to
+/// log2( P( bit=0 ) / P( bit=1 ) )   (so positive belief indicates 0 bit and negative indicates 1)
+/// If input beliefs are close to true value of the above, then output beliefs are also
+/// reasonable probability values, so the decoding algorithm is able to estimate how
+/// successful was the decoding process
 pub trait EccCode {
     fn decode(&mut self, data: &[f64], options: DecodingOptions) -> DecodingResult;
     fn encode(&self, data: &mut [Bit]);
