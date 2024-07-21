@@ -1,5 +1,7 @@
 use std::ops::{Index, IndexMut};
 use lzma::{compress, decompress};
+use sha2::{Digest, Sha256};
+use std::fmt::Write;
 
 pub struct IraEccCodeCompressedRepresentation {
     pub(crate) data: Vec<usize>,
@@ -54,5 +56,22 @@ impl IraEccCodeCompressedRepresentation {
         IraEccCodeCompressedRepresentation {
             data: decompress(buf).unwrap().chunks(8).map(|x| usize::from_le_bytes(x.try_into().unwrap())).collect()
         }
+    }
+
+    pub fn checksum(&self) -> String {
+        let mut hasher = Sha256::new();
+
+        for b in self.data.iter() {
+            sha2::digest::Update::update(&mut hasher, &b.to_le_bytes()[..]);
+        }
+
+        let res = hasher.finalize();
+
+        let mut s = String::new();
+        for &byte in res.as_slice().iter() {
+            write!(&mut s, "{:0x}", byte).unwrap();
+        }
+
+        s
     }
 }

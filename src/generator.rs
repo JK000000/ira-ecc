@@ -22,11 +22,19 @@ impl IraCodeGenerator {
     pub fn generate(&self, seed: u64) -> IraEccCodeCompressedRepresentation {
         assert!((1.0 - self.message_nodes_degree_ratios.iter().map(|(_, &x)| x).sum::<f64>()) < 1e-8);
 
-        let mut rng = ChaChaRng::seed_from_u64(seed);
+        let mut act_seed = [0u8; 32];
+
+        act_seed[0..8].copy_from_slice(&seed.to_le_bytes()[..]);
+
+        let mut rng = ChaChaRng::from_seed(act_seed);
 
         let mut message_node_degrees = Vec::new();
 
-        'outer: for (&quant, &ratio) in self.message_nodes_degree_ratios.iter() {
+        let mut degree_ratios_sorted: Vec<_> = self.message_nodes_degree_ratios.iter().map(|(&x, &y)| (x, y)).collect();
+
+        degree_ratios_sorted.sort_unstable_by_key(|(x, _)| *x);
+
+        'outer: for (quant, ratio) in degree_ratios_sorted.into_iter() {
             let num = (self.message_len as f64 * ratio).round() as usize;
 
             for _ in 0..num {
@@ -37,7 +45,8 @@ impl IraCodeGenerator {
             }
         }
 
-        let avg_node_degree = (message_node_degrees.iter().sum::<usize>() as f64 / message_node_degrees.len() as f64).round() as usize;
+        let avg_node_degree = message_node_degrees.iter().sum::<usize>() as f64 / message_node_degrees.len() as f64;
+        let avg_node_degree = avg_node_degree.round() as usize;
 
         while message_node_degrees.len() < self.message_len {
             message_node_degrees.push(avg_node_degree);
