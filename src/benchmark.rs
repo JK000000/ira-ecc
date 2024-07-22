@@ -1,9 +1,12 @@
 use indicatif::ProgressBar;
+use ordered_float::OrderedFloat;
+use priority_queue::PriorityQueue;
 use rand::{random, Rng, thread_rng};
 use rand_distr::Normal;
+use statrs::distribution::{ChiSquared, ContinuousCDF};
 use crate::{Bit, bits_to_belief, DecodingOptions, EccCode};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum BenchmarkChannelType {
     BSC,
     BEC,
@@ -46,6 +49,183 @@ pub struct BenchmarkResult {
     pub probability_assessment_accuracy: f64,
 }
 
+
+#[derive(Clone)]
+pub struct BerEstimationSettings {
+    pub channel_type: BenchmarkChannelType,
+    pub channel_param_range: (f64, f64),
+    pub decoding_options: DecodingOptions,
+    pub num_refinements: usize,
+    pub statistical_confidence_level: f64,
+    pub confidence_interval_radius_db: f64,
+    pub confidence_interval_around_zero: f64,
+    pub max_iterations_per_point: usize,
+    pub min_iterations_per_point: usize,
+    pub show_progress: bool,
+}
+
+impl Default for BerEstimationSettings {
+    fn default() -> Self {
+        BerEstimationSettings {
+            channel_type: BenchmarkChannelType::BSC,
+            channel_param_range: (0.0, 0.5),
+            decoding_options: DecodingOptions::default(),
+            num_refinements: 40,
+            statistical_confidence_level: 0.99,
+            confidence_interval_radius_db: 0.01,
+            confidence_interval_around_zero: 1e-4,
+            max_iterations_per_point: 1000,
+            min_iterations_per_point: 10,
+            show_progress: true
+        }
+    }
+}
+
+fn ber_estimation_round(channel_error_param: f64, code: &mut impl EccCode, channel_type: &BenchmarkChannelType, decoding_options: &DecodingOptions) -> usize {
+    let mut belief_data;
+    let mut message = vec![0 as Bit; code.encoded_len()];
+
+    for i in 0..code.message_len() {
+        message[i] = thread_rng().gen_range(0..2);
+    }
+
+    code.encode(&mut message);
+
+    match channel_type {
+        BenchmarkChannelType::BSC => {
+            let belief_level = ((1.0 - channel_error_param) / channel_error_param).ln();
+
+            belief_data = bits_to_belief(&message, belief_level);
+
+            belief_data.iter_mut().for_each(|x| {
+                if random::<f64>() < channel_error_param {
+                    *x = -(*x);
+                }
+            });
+        }
+        BenchmarkChannelType::BEC => {
+            belief_data = bits_to_belief(&message, decoding_options.max_message);
+
+            belief_data.iter_mut().for_each(|x| {
+                if random::<f64>() < channel_error_param {
+                    *x = 0.0;
+                }
+            });
+        }
+        BenchmarkChannelType::AWGN => {
+            let dist = Normal::new(0.0, channel_error_param).unwrap();
+            let distorted_bits = message.iter().map(|&x| x as f64 + thread_rng().sample(dist));
+            belief_data = distorted_bits.map(|x| {
+                let dist_0 = ((x - 0.0) / channel_error_param).powi(2);
+                let dist_1 = ((x - 1.0) / channel_error_param).powi(2);
+                return -dist_0 + dist_1;
+            }).collect();
+        }
+    }
+
+
+    let decoding_res = code.decode(&belief_data, decoding_options.clone());
+
+    let mut decoded_msg = vec![0 as Bit; code.message_len()];
+
+    decoding_res.to_bits(&mut decoded_msg);
+
+    let mut wrong_bits = 0;
+
+    for i in 0..code.message_len() {
+        if decoded_msg[i] != message[i] {
+            wrong_bits += 1;
+        }
+    }
+
+    wrong_bits
+}
+
+fn estimate_ber_at_point(code: &mut impl EccCode, settings: &BerEstimationSettings, point: f64) -> f64 {
+
+    let mut sum = 0;
+    let mut n = 0;
+
+    for i in 0..settings.max_iterations_per_point {
+        n = i;
+
+        if i >= settings.min_iterations_per_point {
+            let alpha = 1.0 - settings.statistical_confidence_level;
+            let lower;
+
+            if sum == 0 {
+                lower = 0.0;
+            } else {
+                let dist = ChiSquared::new((2*sum) as f64).unwrap();
+                lower = dist.inverse_cdf(alpha * 0.5);
+            }
+
+            let dist = ChiSquared::new((2*sum+2) as f64).unwrap();
+            let upper = dist.inverse_cdf(1.0 - alpha * 0.5);
+
+            let lower_ber = lower / (n as f64 * code.message_len() as f64);
+            let upper_ber = upper / (n as f64 * code.message_len() as f64);
+
+
+            if lower_ber == 0.0 && upper_ber < settings.confidence_interval_around_zero {
+                break;
+            } else if lower_ber != 0.0 && (lower_ber - upper_ber).abs() < 2.0 * settings.confidence_interval_radius_db {
+                break;
+            }
+        }
+
+        let wrong_bits = ber_estimation_round(point, code, &settings.channel_type, &settings.decoding_options);
+        sum += wrong_bits;
+    }
+
+    sum as f64 / (n as f64 * code.message_len() as f64)
+}
+
+fn priority_func(a: f64, b: f64) -> u64 {
+    ((a-b).abs() * 100.0).floor() as u64
+}
+
+pub fn estimate_ber(code: &mut impl EccCode, settings: BerEstimationSettings) -> Vec<(f64, f64)> {
+
+    let mut pb = match settings.show_progress {
+        true => Some(ProgressBar::new(settings.num_refinements as u64)),
+        false => None
+    };
+
+    let mut pq = PriorityQueue::new();
+
+    let begin_ber = estimate_ber_at_point(code, &settings, settings.channel_param_range.0);
+    let end_ber = estimate_ber_at_point(code, &settings, settings.channel_param_range.1);
+
+    let mut res = Vec::new();
+
+    res.push((settings.channel_param_range.0, begin_ber));
+    res.push((settings.channel_param_range.1, end_ber));
+
+    pq.push(((OrderedFloat(settings.channel_param_range.0), OrderedFloat(settings.channel_param_range.1)), (OrderedFloat(begin_ber), OrderedFloat(end_ber))), priority_func(begin_ber, end_ber));
+
+    for _ in 0..settings.num_refinements {
+        let (((b,e), (b_ber, e_ber)), _) = pq.pop().unwrap();
+
+        let mid = (b+e) / 2.0;
+
+        let mid_ber = OrderedFloat(estimate_ber_at_point(code, &settings, f64::from(mid)));
+
+        res.push((f64::from(mid), f64::from(mid_ber)));
+
+        pq.push(((b, mid), (b_ber, mid_ber)), priority_func(f64::from(b_ber), f64::from(mid_ber)));
+        pq.push(((mid, e), (mid_ber, e_ber)), priority_func(f64::from(mid_ber), f64::from(e_ber)));
+
+        if let Some(pb) = &mut pb {
+            pb.inc(1);
+        }
+    }
+
+    res.sort_unstable_by_key(|(x, _)| (x * 10000.0).floor() as i64);
+
+    res
+}
+
 pub fn benchmark_code(code: &mut impl EccCode, settings: BenchmarkSettings) -> Vec<BenchmarkResult> {
     let mut results = vec![];
 
@@ -86,7 +266,7 @@ pub fn benchmark_code(code: &mut impl EccCode, settings: BenchmarkSettings) -> V
 
             match settings.channel_type {
                 BenchmarkChannelType::BSC => {
-                    let belief_level = ((1.0 - channel_error_param) / channel_error_param).log2();
+                    let belief_level = ((1.0 - channel_error_param) / channel_error_param).ln();
 
                     belief_data = bits_to_belief(&message, belief_level);
 
