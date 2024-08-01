@@ -1,3 +1,4 @@
+use std::time::Instant;
 use indicatif::ProgressBar;
 use ordered_float::OrderedFloat;
 use priority_queue::PriorityQueue;
@@ -224,6 +225,98 @@ pub fn estimate_ber(code: &mut impl EccCode, settings: BerEstimationSettings) ->
     res.sort_unstable_by_key(|(x, _)| (x * 10000.0).floor() as i64);
 
     res
+}
+
+pub struct SpeedMeasurementSettings {
+    pub channel_type: BenchmarkChannelType,
+    pub channel_error_param: f64,
+    pub decoding_options: DecodingOptions,
+    pub num_rounds: usize,
+    pub show_progress: bool
+}
+
+/// Returns (encoding_speed, decoding_speed, total_wrong_bits) in Mbit/s with respect to encoded block size
+pub fn measure_speed(code: &mut impl EccCode, settings: SpeedMeasurementSettings) -> (f64, f64, usize) {
+
+    let mut total_wrong_bits = 0;
+    let mut total_encoding_time = 0.0;
+    let mut total_decoding_time = 0.0;
+
+    let mut pb = match settings.show_progress {
+        true => Some(ProgressBar::new(settings.num_rounds as u64)),
+        false => None
+    };
+
+    for _ in 0..settings.num_rounds {
+        let mut belief_data;
+        let mut message = vec![0 as Bit; code.encoded_len()];
+
+        for i in 0..code.message_len() {
+            message[i] = thread_rng().gen_range(0..2);
+        }
+
+        let tm = Instant::now();
+        code.encode(&mut message);
+        total_encoding_time += tm.elapsed().as_secs_f64();
+
+        match settings.channel_type {
+            BenchmarkChannelType::BSC => {
+                let belief_level = ((1.0 - settings.channel_error_param) / settings.channel_error_param).ln();
+
+                belief_data = bits_to_belief(&message, belief_level);
+
+                belief_data.iter_mut().for_each(|x| {
+                    if random::<f64>() < settings.channel_error_param {
+                        *x = -(*x);
+                    }
+                });
+            }
+            BenchmarkChannelType::BEC => {
+                belief_data = bits_to_belief(&message, settings.decoding_options.max_message);
+
+                belief_data.iter_mut().for_each(|x| {
+                    if random::<f64>() < settings.channel_error_param {
+                        *x = 0.0;
+                    }
+                });
+            }
+            BenchmarkChannelType::AWGN => {
+                let dist = Normal::new(0.0, settings.channel_error_param).unwrap();
+                let distorted_bits = message.iter().map(|&x| x as f64 + thread_rng().sample(dist));
+                belief_data = distorted_bits.map(|x| {
+                    let dist_0 = ((x - 0.0) / settings.channel_error_param).powi(2);
+                    let dist_1 = ((x - 1.0) / settings.channel_error_param).powi(2);
+                    return -dist_0 + dist_1;
+                }).collect();
+            }
+        }
+
+        let tm = Instant::now();
+        let decoding_res = code.decode(&belief_data, settings.decoding_options.clone());
+        total_decoding_time += tm.elapsed().as_secs_f64();
+
+        let mut decoded_msg = vec![0 as Bit; code.message_len()];
+
+        decoding_res.to_bits(&mut decoded_msg);
+
+        let mut wrong_bits = 0;
+
+        for i in 0..code.message_len() {
+            if decoded_msg[i] != message[i] {
+                wrong_bits += 1;
+            }
+        }
+
+        total_wrong_bits += wrong_bits;
+
+        if let Some(pb) = &mut pb {
+            pb.inc(1);
+        }
+    }
+
+    let total_size = settings.num_rounds as f64 * code.encoded_len() as f64 / 1048576.0;
+
+    (total_size / total_encoding_time, total_size / total_decoding_time, total_wrong_bits)
 }
 
 pub fn benchmark_code(code: &mut impl EccCode, settings: BenchmarkSettings) -> Vec<BenchmarkResult> {

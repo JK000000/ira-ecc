@@ -31,7 +31,7 @@ impl IraEccCodeCompressedRepresentation {
         return self.data[1];
     }
 
-    pub fn check_nodes_left_degree(&self) -> usize {
+    pub fn num_check_nodes(&self) -> usize {
         return self.data[2];
     }
 
@@ -43,7 +43,7 @@ impl IraEccCodeCompressedRepresentation {
         self.data[1] = val;
     }
 
-    pub fn set_check_nodes_left_degree(&mut self, val: usize) {
+    pub fn set_num_check_nodes(&mut self, val: usize) {
         self.data[2] = val;
     }
 
