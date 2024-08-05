@@ -6,6 +6,7 @@ pub mod benchmark;
 pub mod generator;
 pub mod compressed;
 mod hamming;
+pub mod design;
 
 
 use std::cmp::min;
@@ -151,7 +152,9 @@ impl NodeData {
 
                         let mut zero_occurred = false;
 
-                        for &(val, _) in self.received_messages.iter() {
+                        let mut vals = vec![1.0; self.received_messages.len()];
+
+                        for (idx, &(val, _)) in self.received_messages.iter().enumerate() {
                             if val == 0.0 {
                                 if !zero_occurred {
                                     zero_occurred = true;
@@ -160,20 +163,21 @@ impl NodeData {
                                     break;
                                 }
                             } else {
-                                prod *= (0.5 * val).tanh();
+                                vals[idx] = (0.5 * val).tanh();
+                                prod *= vals[idx];
                             }
                         }
 
                         let atanh_prod = 2.0 * prod.atanh();
 
-                        for &(val, sender) in self.received_messages.iter() {
+                        for (idx, &(val, sender)) in self.received_messages.iter().enumerate() {
                             if val == 0.0 {
                                 self.preprocessed_messages.push((sender, atanh_prod));
                             } else {
                                 if zero_occurred {
                                     self.preprocessed_messages.push((sender, 0.0));
                                 } else {
-                                    self.preprocessed_messages.push((sender, 2.0 * (prod / (0.5 * val).tanh()).atanh()));
+                                    self.preprocessed_messages.push((sender, 2.0 * (prod / vals[idx]).atanh()));
                                 }
                             }
                         }

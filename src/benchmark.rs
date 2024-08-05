@@ -76,7 +76,7 @@ impl Default for BerEstimationSettings {
             confidence_interval_radius_db: 0.01,
             confidence_interval_around_zero: 1e-4,
             max_iterations_per_point: 1000,
-            min_iterations_per_point: 10,
+            min_iterations_per_point: 5,
             show_progress: true
         }
     }
@@ -183,7 +183,7 @@ fn estimate_ber_at_point(code: &mut impl EccCode, settings: &BerEstimationSettin
 }
 
 fn priority_func(a: f64, b: f64) -> u64 {
-    ((a-b).abs() * 100.0).floor() as u64
+    ((a.powf(0.2)-b.powf(0.2)).abs() * 100.0).floor() as u64
 }
 
 pub fn estimate_ber(code: &mut impl EccCode, settings: BerEstimationSettings) -> Vec<(f64, f64)> {

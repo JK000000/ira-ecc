@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 use rand::{random, Rng, thread_rng};
+use statrs::assert_almost_eq;
+use crate::design::{approximate_integral, JFunc, solve_optimal_degree_distribution};
 use crate::generator::{ClassicIraCodeGenerator, Hamming84IraCodeGenerator};
 use crate::NodeType::{CHECK, DATA};
 use crate::standard_codes::edge_ratios_to_node_ratios;
@@ -650,4 +652,28 @@ fn generated_code_with_hamming_nodes() {
     }
 
     assert_eq!(wrong_bits, 0);
+}
+
+#[test]
+fn code_design_math() {
+    let test_res = approximate_integral(2.0, 2.0);
+
+    assert!((0.6167097919907762 - test_res).abs() < 1e-11);
+
+    let jfunc = JFunc::new(0.0);
+
+    let val = jfunc.val(1.0);
+
+    assert!((0.29048011336096778 - val).abs() < 1e-10);
+
+    let val = jfunc.inverse(0.29048011336096778);
+
+    assert!((1.0 - val).abs() < 1e-10);
+}
+
+#[test]
+fn code_design() {
+    let res = solve_optimal_degree_distribution(8, 0.1, 100, 10);
+
+    println!("{:?}", res);
 }
