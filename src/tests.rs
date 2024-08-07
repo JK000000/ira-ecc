@@ -4,7 +4,7 @@ use statrs::assert_almost_eq;
 use crate::design::{approximate_integral, JFunc, solve_optimal_degree_distribution};
 use crate::generator::{ClassicIraCodeGenerator, Hamming84IraCodeGenerator};
 use crate::NodeType::{CHECK, DATA};
-use crate::standard_codes::edge_ratios_to_node_ratios;
+use crate::example_codes::edge_ratios_to_node_ratios;
 use super::*;
 
 #[test]
@@ -669,11 +669,4 @@ fn code_design_math() {
     let val = jfunc.inverse(0.29048011336096778);
 
     assert!((1.0 - val).abs() < 1e-10);
-}
-
-#[test]
-fn code_design() {
-    let res = solve_optimal_degree_distribution(8, 0.1, 100, 10);
-
-    println!("{:?}", res);
 }

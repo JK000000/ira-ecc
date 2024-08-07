@@ -1,4 +1,4 @@
-pub mod standard_codes;
+pub mod example_codes;
 
 #[cfg(test)]
 mod tests;
