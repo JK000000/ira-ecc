@@ -5,7 +5,7 @@ use priority_queue::PriorityQueue;
 use rand::{random, Rng, thread_rng};
 use rand_distr::Normal;
 use statrs::distribution::{ChiSquared, ContinuousCDF};
-use crate::{Bit, bits_to_belief, DecodingOptions, EccCode};
+use crate::{Bit, bits_to_belief, DecodingOptions, EccCode, quantize};
 
 #[derive(Debug, Clone)]
 pub enum BenchmarkChannelType {
@@ -109,7 +109,7 @@ fn ber_estimation_round(channel_error_param: f64, code: &mut impl EccCode, chann
 
             belief_data.iter_mut().for_each(|x| {
                 if random::<f64>() < channel_error_param {
-                    *x = 0.0;
+                    *x = 0;
                 }
             });
         }
@@ -119,7 +119,7 @@ fn ber_estimation_round(channel_error_param: f64, code: &mut impl EccCode, chann
             belief_data = distorted_bits.map(|x| {
                 let dist_0 = ((x - 0.0) / channel_error_param).powi(2);
                 let dist_1 = ((x - 1.0) / channel_error_param).powi(2);
-                return -dist_0 + dist_1;
+                return quantize(-dist_0 + dist_1);
             }).collect();
         }
     }
@@ -276,7 +276,7 @@ pub fn measure_speed(code: &mut impl EccCode, settings: SpeedMeasurementSettings
 
                 belief_data.iter_mut().for_each(|x| {
                     if random::<f64>() < settings.channel_error_param {
-                        *x = 0.0;
+                        *x = 0;
                     }
                 });
             }
@@ -286,7 +286,7 @@ pub fn measure_speed(code: &mut impl EccCode, settings: SpeedMeasurementSettings
                 belief_data = distorted_bits.map(|x| {
                     let dist_0 = ((x - 0.0) / settings.channel_error_param).powi(2);
                     let dist_1 = ((x - 1.0) / settings.channel_error_param).powi(2);
-                    return -dist_0 + dist_1;
+                    return quantize(-dist_0 + dist_1);
                 }).collect();
             }
         }
@@ -374,7 +374,7 @@ pub fn benchmark_code(code: &mut impl EccCode, settings: BenchmarkSettings) -> V
 
                     belief_data.iter_mut().for_each(|x| {
                         if random::<f64>() < channel_error_param {
-                            *x = 0.0;
+                            *x = 0;
                         }
                     });
                 }
@@ -384,7 +384,7 @@ pub fn benchmark_code(code: &mut impl EccCode, settings: BenchmarkSettings) -> V
                     belief_data = distorted_bits.map(|x| {
                         let dist_0 = ((x - 0.0) / channel_error_param).powi(2);
                         let dist_1 = ((x - 1.0) / channel_error_param).powi(2);
-                        return -dist_0 + dist_1;
+                        return quantize(-dist_0 + dist_1);
                     }).collect();
                 }
             }
@@ -392,8 +392,8 @@ pub fn benchmark_code(code: &mut impl EccCode, settings: BenchmarkSettings) -> V
 
             let decoding_res = code.decode(&belief_data, settings.decoding_options);
 
-            let mut sorted_by_uncertainty: Vec<(usize, f64)> = decoding_res.data.iter().enumerate().map(|(idx, &val)| (idx, val.abs())).collect();
-            sorted_by_uncertainty.sort_unstable_by(|(_, a), (_, b)| a.total_cmp(b));
+            let mut sorted_by_uncertainty: Vec<(usize, i16)> = decoding_res.data.iter().enumerate().map(|(idx, &val)| (idx, val.abs())).collect();
+            sorted_by_uncertainty.sort_unstable_by(|(_, a), (_, b)| a.cmp(b));
 
             decoding_res.to_bits(&mut decoded_bits);
 

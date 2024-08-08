@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::f64::consts::PI;
-use rand_distr::num_traits::FloatConst;
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
 use peroxide::fuga::*;
@@ -21,7 +20,7 @@ impl ODEProblem for IntegralODEProblem {
         vec![0.0]
     }
 
-    fn rhs(&self, t: f64, y: &[f64], dy: &mut [f64]) -> anyhow::Result<()> {
+    fn rhs(&self, t: f64, _y: &[f64], dy: &mut [f64]) -> anyhow::Result<()> {
         dy[0] = (-t.powi(2)).exp() * (1.0 + (-self.a * t - self.b).exp()).log2();
         Ok(())
     }
@@ -67,7 +66,7 @@ impl JFunc {
 
         let t: Vec<_> = (0..Self::NUM_STEPS).collect();
 
-        let mut data: Vec<_> = t.into_par_iter().map(|i| {
+        let data: Vec<_> = t.into_par_iter().map(|i| {
             let mu = i as f64 * Self::MAX_VAL / Self::NUM_STEPS as f64;
 
             let val = approximate_integral(-2.0*mu.sqrt(), mu + offset);
