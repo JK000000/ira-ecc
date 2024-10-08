@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use rand::{random, Rng, thread_rng};
-use crate::design::{approximate_integral, JFunc};
 use crate::generator::{ClassicIraCodeGenerator, Hamming84IraCodeGenerator};
 use crate::example_codes::edge_ratios_to_node_ratios;
 use super::*;
@@ -122,120 +121,30 @@ fn simple_graph() {
 
     assert!(decoded_bits == [0, 1, 1] || decoded_bits == [0, 1, 0]);
 }
-/*
+
 #[test]
 fn simple_graph_with_hamming_node() {
     let mut code = IraEccCode {
         message_len: 4,
         encoded_len: 11,
         data_nodes: vec![
-            NodeData {
-                node_type: DATA,
-                check_node_type: CheckNodeType::PARITY,
-                connections: vec![0, 1],
-                received_messages: vec![],
-                preprocessed_messages: vec![]
-            },
-            NodeData {
-                node_type: DATA,
-                check_node_type: CheckNodeType::PARITY,
-                connections: vec![1, 2, 3],
-                received_messages: vec![],
-                preprocessed_messages: vec![]
-            },
-            NodeData {
-                node_type: DATA,
-                check_node_type: CheckNodeType::PARITY,
-                connections: vec![0, 2],
-                received_messages: vec![],
-                preprocessed_messages: vec![]
-            },
-            NodeData {
-                node_type: DATA,
-                check_node_type: CheckNodeType::PARITY,
-                connections: vec![2, 3],
-                received_messages: vec![],
-                preprocessed_messages: vec![]
-            },
-            NodeData {
-                node_type: DATA,
-                check_node_type: CheckNodeType::PARITY,
-                connections: vec![0, 1],
-                received_messages: vec![],
-                preprocessed_messages: vec![]
-            },
-            NodeData {
-                node_type: DATA,
-                check_node_type: CheckNodeType::PARITY,
-                connections: vec![1, 2],
-                received_messages: vec![],
-                preprocessed_messages: vec![]
-            },
-            NodeData {
-                node_type: DATA,
-                check_node_type: CheckNodeType::PARITY,
-                connections: vec![2, 3],
-                received_messages: vec![],
-                preprocessed_messages: vec![]
-            },
-            NodeData {
-                node_type: DATA,
-                check_node_type: CheckNodeType::PARITY,
-                connections: vec![2, 3],
-                received_messages: vec![],
-                preprocessed_messages: vec![]
-            },
-            NodeData {
-                node_type: DATA,
-                check_node_type: CheckNodeType::PARITY,
-                connections: vec![2, 3],
-                received_messages: vec![],
-                preprocessed_messages: vec![]
-            },
-            NodeData {
-                node_type: DATA,
-                check_node_type: CheckNodeType::PARITY,
-                connections: vec![2, 3],
-                received_messages: vec![],
-                preprocessed_messages: vec![]
-            },
-            NodeData {
-                node_type: DATA,
-                check_node_type: CheckNodeType::PARITY,
-                connections: vec![3],
-                received_messages: vec![],
-                preprocessed_messages: vec![]
-            },
+            NodeData::new_data(vec![(0,0), (1,0)]),
+            NodeData::new_data(vec![(1,1), (2,0), (3,0)]),
+            NodeData::new_data(vec![(0,1), (2,1)]),
+            NodeData::new_data(vec![(2,2), (3,1)]),
+            NodeData::new_data(vec![(0,2), (1,2)]),
+            NodeData::new_data(vec![(1,3), (2,3)]),
+            NodeData::new_data(vec![(2,4), (3,2)]),
+            NodeData::new_data(vec![(2,5), (3,3)]),
+            NodeData::new_data(vec![(2,6), (3,4)]),
+            NodeData::new_data(vec![(2,7), (3,5)]),
+            NodeData::new_data(vec![(3,6)]),
         ],
         check_nodes: vec![
-            NodeData {
-                node_type: CHECK,
-                check_node_type: CheckNodeType::PARITY,
-                connections: vec![0, 2, 4],
-                received_messages: vec![],
-                preprocessed_messages: vec![]
-            },
-            NodeData {
-                node_type: CHECK,
-                check_node_type: CheckNodeType::PARITY,
-                connections: vec![0, 1, 4, 5],
-                received_messages: vec![],
-                preprocessed_messages: vec![]
-            },
-            NodeData {
-                node_type: CHECK,
-                check_node_type: CheckNodeType::HAMMING84,
-                connections: vec![1, 2, 3, 5, 6, 7, 8, 9],
-                received_messages: vec![],
-                preprocessed_messages: vec![]
-            },
-            NodeData {
-                node_type: CHECK,
-                check_node_type: CheckNodeType::PARITY,
-                connections: vec![1, 3, 6, 7, 8, 9, 10],
-                received_messages: vec![],
-                preprocessed_messages: vec![]
-            },
+            NodeData::new_check(vec![(0,0), (2,0), (4,0)], CheckNodeType::PARITY),
+            NodeData::new_check(vec![(0,1), (1,0), (4,1), (5,0)], CheckNodeType::PARITY),
+            NodeData::new_check(vec![(1,1), (2,1), (3,0), (5,1), (6,0), (7,0), (8,0), (9,0)], CheckNodeType::HAMMING84),
+            NodeData::new_check(vec![(1,2), (3,1), (6,1), (7,1), (8,1), (9,1), (10,0)], CheckNodeType::PARITY),
         ],
     };
 
@@ -289,170 +198,6 @@ fn simple_graph_with_hamming_node() {
 
 
 }
-
-#[test]
-fn simple_graph_with_hamming_node_v2() {
-    let mut code = IraEccCode {
-        message_len: 4,
-        encoded_len: 11,
-        data_nodes: vec![
-            NodeData {
-                node_type: DATA,
-                check_node_type: CheckNodeType::PARITY,
-                connections: vec![0, 1],
-                received_messages: vec![],
-                preprocessed_messages: vec![]
-            },
-            NodeData {
-                node_type: DATA,
-                check_node_type: CheckNodeType::PARITY,
-                connections: vec![0, 2],
-                received_messages: vec![],
-                preprocessed_messages: vec![]
-            },
-            NodeData {
-                node_type: DATA,
-                check_node_type: CheckNodeType::PARITY,
-                connections: vec![0, 1, 3],
-                received_messages: vec![],
-                preprocessed_messages: vec![]
-            },
-            NodeData {
-                node_type: DATA,
-                check_node_type: CheckNodeType::PARITY,
-                connections: vec![0, 2, 3],
-                received_messages: vec![],
-                preprocessed_messages: vec![]
-            },
-            NodeData {
-                node_type: DATA,
-                check_node_type: CheckNodeType::PARITY,
-                connections: vec![0, 1],
-                received_messages: vec![],
-                preprocessed_messages: vec![]
-            },
-            NodeData {
-                node_type: DATA,
-                check_node_type: CheckNodeType::PARITY,
-                connections: vec![0, 2],
-                received_messages: vec![],
-                preprocessed_messages: vec![]
-            },
-            NodeData {
-                node_type: DATA,
-                check_node_type: CheckNodeType::PARITY,
-                connections: vec![0, 3],
-                received_messages: vec![],
-                preprocessed_messages: vec![]
-            },
-            NodeData {
-                node_type: DATA,
-                check_node_type: CheckNodeType::PARITY,
-                connections: vec![0],
-                received_messages: vec![],
-                preprocessed_messages: vec![]
-            },
-            NodeData {
-                node_type: DATA,
-                check_node_type: CheckNodeType::PARITY,
-                connections: vec![1, 2],
-                received_messages: vec![],
-                preprocessed_messages: vec![]
-            },
-            NodeData {
-                node_type: DATA,
-                check_node_type: CheckNodeType::PARITY,
-                connections: vec![2, 3],
-                received_messages: vec![],
-                preprocessed_messages: vec![]
-            },
-            NodeData {
-                node_type: DATA,
-                check_node_type: CheckNodeType::PARITY,
-                connections: vec![3],
-                received_messages: vec![],
-                preprocessed_messages: vec![]
-            },
-        ],
-        check_nodes: vec![
-            NodeData {
-                node_type: CHECK,
-                check_node_type: CheckNodeType::HAMMING84,
-                connections: vec![0, 1, 2, 3, 4, 5, 6, 7],
-                received_messages: vec![],
-                preprocessed_messages: vec![]
-            },
-            NodeData {
-                node_type: CHECK,
-                check_node_type: CheckNodeType::PARITY,
-                connections: vec![0, 2, 4, 8],
-                received_messages: vec![],
-                preprocessed_messages: vec![]
-            },
-            NodeData {
-                node_type: CHECK,
-                check_node_type: CheckNodeType::PARITY,
-                connections: vec![1, 3, 5, 8, 9],
-                received_messages: vec![],
-                preprocessed_messages: vec![]
-            },
-            NodeData {
-                node_type: CHECK,
-                check_node_type: CheckNodeType::PARITY,
-                connections: vec![2, 3, 6, 9, 10],
-                received_messages: vec![],
-                preprocessed_messages: vec![]
-            },
-        ],
-    };
-
-    let mut msg = [0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0];
-
-    code.encode(&mut msg);
-
-    assert_eq!(msg, [0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 1]);
-
-    let encoded_belief = bits_to_belief(&msg, 30.0);
-
-    let decoding_res = code.decode(&encoded_belief, DecodingOptions::default());
-
-    let correctness_prob = decoding_res.correctness_probability();
-
-    assert!(correctness_prob > 0.999);
-
-    let mut decoded_bits = [0, 0, 0, 0];
-
-    decoding_res.to_bits(&mut decoded_bits);
-
-    assert_eq!(decoded_bits, [0, 1, 1, 0]);
-
-
-
-    let mut msg = [0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0];
-
-    code.encode(&mut msg);
-
-    msg[6] = 1;
-
-    let mut encoded_belief = bits_to_belief(&msg, 4.0);
-
-    encoded_belief[0] = 0;
-    encoded_belief[5] = 0;
-
-    let decoding_res = code.decode(&encoded_belief, DecodingOptions::default());
-
-    let correctness_prob = decoding_res.correctness_probability();
-
-    assert!(correctness_prob > 0.999);
-
-    let mut decoded_bits = [0, 0, 0, 0];
-
-    decoding_res.to_bits(&mut decoded_bits);
-
-    assert_eq!(decoded_bits, [0, 1, 1, 0]);
-}
-*/
-
 
 #[test]
 fn generated_code() {
@@ -599,21 +344,3 @@ fn generated_code_with_hamming_nodes() {
 
     assert_eq!(wrong_bits, 0);
 }
-/*
-#[test]
-fn code_design_math() {
-    let test_res = approximate_integral(2.0, 2.0);
-
-    assert!((0.6167097919907762 - test_res).abs() < 1e-11);
-
-    let jfunc = JFunc::new(0.0);
-
-    let val = jfunc.val(1.0);
-
-    assert!((0.29048011336096778 - val).abs() < 1e-10);
-
-    let val = jfunc.inverse(0.29048011336096778);
-
-    assert!((1.0 - val).abs() < 1e-10);
-}
-*/

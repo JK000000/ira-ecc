@@ -11,7 +11,6 @@ pub mod design;
 
 use std::cmp::min;
 use rayon::prelude::*;
-use sha2::digest::typenum::op;
 use crate::compressed::IraEccCodeCompressedRepresentation;
 use crate::hamming::{HAMMING84_CODEWORDS, hamming84_encode};
 use crate::NodeType::{CHECK, DATA};
@@ -81,14 +80,18 @@ impl Default for DecodingOptions {
 
 static MULTIPLY_LOOKUP_TABLE: [i16; include_bytes!("../res/mult_lookup_table.bin").len() / 2] = unsafe {std::mem::transmute(*include_bytes!("../res/mult_lookup_table.bin")) };
 
+
+// Changing these values requires re-generating the lookup table (res/mult_lookup_table.bin)
 const QUANTIZATION_MAX_MESSAGE: f64 = 30.0;
+const QUANTIZED_MAX_VALUE: i16 = 2047;
+const QUANTIZED_BITS: usize = 12;
 
 fn multiply_lookup_table_get(a: i16, b: i16) -> i16 {
     let mut idx = 0usize;
-    let a = if a >= 0 { a as usize } else { -a as usize + 2048 };
-    let b = if b >= 0 { b as usize } else { -b as usize + 2048 };
+    let a = if a >= 0 { a as usize } else { -a as usize + QUANTIZED_MAX_VALUE as usize + 1 };
+    let b = if b >= 0 { b as usize } else { -b as usize + QUANTIZED_MAX_VALUE as usize + 1 };
     idx |= a;
-    idx |= b << 12;
+    idx |= b << QUANTIZED_BITS;
     MULTIPLY_LOOKUP_TABLE[idx]
 }
 
@@ -97,25 +100,25 @@ pub struct DecodingResult {
 }
 
 fn quantize(x: f64) -> i16 {
-    let mut x = 2047.0 * x / QUANTIZATION_MAX_MESSAGE;
-    if x > 2047.0 {
-        x = 2047.0;
-    } else if x < -2047.0 {
-        x = -2047.0;
+    let mut x = QUANTIZED_MAX_VALUE as f64 * x / QUANTIZATION_MAX_MESSAGE;
+    if x > QUANTIZED_MAX_VALUE as f64 {
+        x = QUANTIZED_MAX_VALUE as f64;
+    } else if x < -QUANTIZED_MAX_VALUE as f64 {
+        x = -QUANTIZED_MAX_VALUE as f64;
     }
 
     x.round() as i16
 }
 
-fn unquantize(x: i16) -> f64 {
-    QUANTIZATION_MAX_MESSAGE * (x as f64) / 2047.0
+fn dequantize(x: i16) -> f64 {
+    QUANTIZATION_MAX_MESSAGE * (x as f64) / QUANTIZED_MAX_VALUE as f64
 }
 
 fn clip(x: i32) -> i16 {
-    if x > 2047 {
-        return 2047
-    } else if x < -2047 {
-        return -2047
+    if x > QUANTIZED_MAX_VALUE as i32 {
+        return QUANTIZED_MAX_VALUE
+    } else if x < -QUANTIZED_MAX_VALUE as i32 {
+        return -QUANTIZED_MAX_VALUE
     }
 
     x as i16
@@ -123,7 +126,7 @@ fn clip(x: i32) -> i16 {
 
 impl DecodingResult {
     pub fn correctness_probability(&self) -> f64 {
-        self.data.par_iter().map(|&x| unquantize(x).abs().exp()).map(|x| (x / (1.0 + x)).ln()).sum::<f64>().exp()
+        self.data.par_iter().map(|&x| dequantize(x).abs().exp()).map(|x| (x / (1.0 + x)).ln()).sum::<f64>().exp()
     }
 
     pub fn to_bits(&self, data: &mut [Bit]) {
@@ -227,9 +230,9 @@ impl NodeData {
 
                             for i in 0..8 {
                                 if c[i] == 0 {
-                                    p[i] = ((0.5 * unquantize(self.messages[i])).tanh() + 1.0) / 2.0;
+                                    p[i] = ((0.5 * dequantize(self.messages[i])).tanh() + 1.0) / 2.0;
                                 } else {
-                                    p[i] = (-(0.5 * unquantize(self.messages[i])).tanh() + 1.0) / 2.0;
+                                    p[i] = (-(0.5 * dequantize(self.messages[i])).tanh() + 1.0) / 2.0;
                                 }
                             }
 
@@ -287,17 +290,6 @@ pub fn bits_to_belief(bits: &[Bit], belief_level: f64) -> Vec<i16> {
     }).collect()
 }
 
-
-/// Encoding an IRA is a simple, exact, linear-time operation
-/// In contrary, decoding is a hard problem and approximate algorithms are used
-/// This implementation uses 'belief propagation' algorithm
-/// In consequence, the decoding process operates on beliefs rather than bits
-/// Belief is essentially a random variable of the correct (before errors) value of a bit
-/// Here beliefs are represented as 64-bit float equal to
-/// log2( P( bit=0 ) / P( bit=1 ) )   (so positive belief indicates 0 bit and negative indicates 1)
-/// If input beliefs are close to true value of the above, then output beliefs are also
-/// reasonable probability values, so the decoding algorithm is able to estimate how
-/// successful was the decoding process
 pub trait EccCode {
     fn decode(&mut self, data: &[i16], options: DecodingOptions) -> DecodingResult;
     fn encode(&self, data: &mut [Bit]);

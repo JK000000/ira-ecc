@@ -2,6 +2,8 @@ use std::collections::HashMap;
 
 
 
+
+
 pub fn edge_ratios_to_node_ratios(edge_ratios: HashMap<usize, f64>) -> HashMap<usize, f64> {
     let mut norm = 0.0;
 
